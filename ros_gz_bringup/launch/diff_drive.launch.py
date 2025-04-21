@@ -17,8 +17,8 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.actions import IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
+from launch_ros.actions import PushRosNamespace, SetRemap
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -43,12 +43,12 @@ def generate_launch_description():
     # Setup to launch the simulator and Gazebo world
     gz_sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')),
-        launch_arguments={'gz_args': PathJoinSubstitution([
-            pkg_project_gazebo,
-            'worlds',
-            'diff_drive.sdf'
-        ])}.items(),
+                    os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')),
+                launch_arguments={'gz_args': PathJoinSubstitution([
+                    pkg_project_gazebo,
+                    'worlds',
+                    'diff_drive.sdf'
+            ])}.items(),
     )
 
     # Takes the description and joint angles as inputs and publishes the 3D poses of the robot links
@@ -56,6 +56,7 @@ def generate_launch_description():
         package='robot_state_publisher',
         executable='robot_state_publisher',
         name='robot_state_publisher',
+        namespace='peter494',
         output='both',
         parameters=[
             {'use_sim_time': True},
@@ -67,6 +68,7 @@ def generate_launch_description():
     rviz = Node(
        package='rviz2',
        executable='rviz2',
+       namespace='peter494',
        arguments=['-d', os.path.join(pkg_project_bringup, 'config', 'diff_drive.rviz')],
        condition=IfCondition(LaunchConfiguration('rviz'))
     )
@@ -75,6 +77,7 @@ def generate_launch_description():
     bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
+        namespace='peter494',
         parameters=[{
             'config_file': os.path.join(pkg_project_bringup, 'config', 'ros_gz_bridge.yaml'),
             'qos_overrides./tf_static.publisher.durability': 'transient_local',
@@ -83,10 +86,14 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        gz_sim,
-        DeclareLaunchArgument('rviz', default_value='true',
-                              description='Open RViz.'),
-        bridge,
-        robot_state_publisher,
-        rviz
+        GroupAction(
+            actions=[
+            SetRemap(src='/diff_drive/cmd_vel', dst='/peter494/cmd_vel'),
+            PushRosNamespace('peter494'),
+            gz_sim,
+            DeclareLaunchArgument('rviz', default_value='true',
+                                  description='Open RViz.'),
+            bridge,
+            robot_state_publisher,
+            rviz])
     ])
